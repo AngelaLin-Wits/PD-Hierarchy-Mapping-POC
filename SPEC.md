@@ -14,16 +14,17 @@ The page should show Converted Data and Original Data in the same page for easy 
 
 ## 3. Upload / workflow
 1. Upload Online PD Hierarchy baseline.
-2. Upload a test PD Hierarchy Excel. Test Excel can be uploaded repeatedly.
-3. Parse and convert the complete workbook.
-4. Show Original Data and Converted Data.
-5. Allow manual review/editing of Converted Data.
-6. Validate declared Excel actions against mapping rules and Online Baseline.
-7. Resolve warnings and required actions.
-8. User clicks **Confirm Mapping**.
-9. Compare final Converted Data against the immutable Online Baseline.
-10. Generate Mapping Change Log / Confirm Mapping output.
-11. Export converted Excel while preserving required workbook structure.
+2. Upload a test PD Hierarchy Excel. Test Excel can be uploaded repeatedly and its Change Command may be blank.
+3. Parse the complete workbook and compare the uploaded hierarchy against the immutable Online Baseline.
+4. Infer hierarchy differences and generate Suggested Change Command(s) where deterministic rules allow.
+5. Show Original Data and Converted Data.
+6. Allow users to review/accept/edit suggested commands and manually edit Converted Data.
+7. Validate declared or accepted Change Commands against mapping rules and Online Baseline.
+8. Resolve warnings and required actions.
+9. User clicks **Confirm Mapping**.
+10. Compare final Converted Data against the immutable Online Baseline.
+11. Generate Mapping Change Log / Confirm Mapping output.
+12. Export converted Excel while preserving required workbook structure.
 
 Confirm Mapping must be disabled while unresolved `Needs Review` or `Required Action` records exist.
 
@@ -47,8 +48,8 @@ Confirm Mapping must be disabled while unresolved `Needs Review` or `Required Ac
 Provide an input for **Planned Go-Live / Effective Date**.
 
 Maintain two description concepts:
-- **Machine Action / Change Command** — structured/fixed action semantics for system processing.
-- **User Description** — user-readable description, defaulted from the action/command and freely editable.
+- **Change Command** — structured/fixed action semantics for system processing.
+- **Change Description** — user-readable description, defaulted from the action/command and freely editable.
 
 Example user-facing description:
 `2026/10/01 new PDL 123 to PD AAA`
@@ -114,7 +115,7 @@ For the POC, `Delete MD` should therefore be treated as a special MD-level trans
 ## 9. Rename / Merge — mandatory batch evaluation
 Rename/Merge determination MUST use **Batch Evaluation**, never sequential row-by-row state mutation.
 
-Before conversion, create an immutable snapshot of the Online PD Hierarchy. Parse the complete set of Excel change commands first, group them by `Hierarchy Level + Target`, evaluate rules, then generate Converted Data.
+Before conversion, create an immutable snapshot of the Online PD Hierarchy. Parse the complete set of Excel hierarchy data and any supplied Change Commands first, group differences by `Hierarchy Level + Target`, evaluate rules, then generate Converted Data and command suggestions.
 
 Target existence is always determined against the Online Baseline Snapshot at the same hierarchy level. It must never be determined from a Converted Data state modified by an earlier Excel row. Therefore changing Excel row order must not change the result.
 
@@ -122,13 +123,13 @@ Target existence is always determined against the Online Baseline Snapshot at th
 If Target does not exist in Online Baseline:
 - `IPSG → IPMG`
 - Baseline: IPSG exists; IPMG does not exist
-- Result: `Rename IPSG to IPMG`
+- Suggested/Result: `Rename IPSG to IPMG`
 
 ### Case 2 — Target already exists
 If Target exists in Online Baseline, source(s) are merged into the existing Target.
 - `IDS → IPMG`
 - Baseline: IDS exists; IPMG exists
-- Result: `Merge IDS into IPMG`
+- Suggested/Result: `Merge IDS into IPMG`
 
 This rule also applies to multiple sources mapped to an already-existing target: all sources are Merge.
 
@@ -153,13 +154,51 @@ If Primary Source = IDS:
 
 Primary Source changes action semantics/logging but not the final hierarchy result.
 
-## 10. Change Command validation
-Excel Change Description/Action represents the user's declared intent but must not be executed unconditionally.
+## 10. Suggested Change Command workflow
+**Change Command is allowed to be blank in an uploaded Test Excel.** A blank command must not prevent the workbook from being uploaded or compared.
+
+When Change Command is blank:
+1. Compare the uploaded hierarchy against the immutable Online Baseline.
+2. Detect hierarchy differences at the applicable level.
+3. Apply the deterministic mapping rules in this specification.
+4. Generate a **Suggested Change Command** where the rule is unambiguous.
+5. Display the suggestion, reason/evidence, and review status to the user.
+6. The user may **Accept Suggestion** or manually modify/select the final Change Command.
+7. Only after user acceptance/review does the suggestion become the effective Change Command for Confirm Mapping.
+
+The system must not silently write a suggestion as though it were user-confirmed.
+
+Suggested commands may include, as applicable:
+- `Add ...`
+- `Rename ... to ...`
+- `Merge ... into ...`
+- `Face Out ...`
+- special MD-level `Delete MD ...` transformation when the hierarchy difference clearly satisfies the MD rule.
+
+For **Multiple Sources → New Target**, the system must not automatically choose a Primary Source. Status is `Required Action`; after the user selects the Primary Source, the system generates the corresponding Rename + Merge commands.
+
+Recommended review-grid columns:
+- **Change Command** — current/confirmed command; may initially be blank.
+- **Suggested Change Command** — system recommendation.
+- **Reason / Evidence** — why the system made the recommendation, including Baseline target existence and/or PDL overlap where applicable.
+- **Status** — `Valid`, `Needs Review`, or `Required Action`.
+- **Action** — e.g. `Accept Suggestion`, Edit, or Select Primary Source.
+
+Example:
+
+| Change Command | Suggested Change Command | Reason / Evidence | Status |
+|---|---|---|---|
+| *(Blank)* | `Rename IPSG to IPMG` | Single Source → New Target; IPMG absent in Baseline | Needs Review |
+| *(Blank)* | `Merge IDS into IPMG` | Target IPMG exists in Baseline | Needs Review |
+| *(Blank)* | Pending Primary Source | Multiple Sources → New Target | Required Action |
+
+## 11. Change Command validation
+A Change Command supplied in Excel or entered/accepted by the user represents declared intent but must not be executed unconditionally.
 
 Validate it against Online Baseline + Mapping Rules:
 
-- **Valid** — declared action matches rule; normal conversion.
-- **Warning / Needs Review** — declared action conflicts with rule. Display the Excel Action, reason, and Suggested Action. Never silently rewrite it; user must confirm/correct it.
+- **Valid** — declared/accepted action matches rule; normal conversion.
+- **Warning / Needs Review** — declared action conflicts with rule, or a system suggestion has not yet been accepted. Display the current Change Command, reason, and Suggested Change Command. Never silently rewrite it; user must confirm/correct it.
 - **Required Action** — e.g. Multiple Sources → New Target; user must choose Primary Source.
 
 Examples:
@@ -168,7 +207,7 @@ Examples:
 - Baseline IPMG absent; Excel says both `Rename IPSG to IPMG` and `Rename IDS to IPMG` → Required Action: select Primary Source.
 - Excel declares generic Delete for PG/PD/PDL → invalid/Needs Review; use lifecycle rules instead.
 
-## 11. Manual editing and logs
+## 12. Manual editing and logs
 - Converted Data must support manual editing of hierarchy values.
 - A manual hierarchy change should be recorded separately as a manual edit/audit event with before/after values and source `Manual Edit`.
 - Upcoming Phase Out annotation alone must not create a log.
@@ -176,12 +215,12 @@ Examples:
 - Do not generate a separate `Move` action in the log. Reassignment should be represented using the applicable Merge/reassignment semantics and a clear before/after hierarchy path.
 - Never generate a physical-delete operation for PG/PD/PDL from the POC output.
 
-## 12. Mapping evidence / recommendation (POC)
+## 13. Mapping evidence / recommendation (POC)
 PDL is the stable comparison basis. Where feasible, show evidence such as matching PDLs and overlap ratio to explain suggested mappings. Recommendations are advisory; do not automatically infer business semantics such as Rename vs Merge when the deterministic rules require user input.
 
 Example evidence: `3 / 3 PDL matched (100%)` plus the relevant PDL list.
 
-## 13. Export
+## 14. Export
 Export the final converted hierarchy in Excel-compatible workbook format while preserving the expected layout as faithfully as possible.
 
 At minimum keep separate worksheets for:
@@ -192,18 +231,27 @@ Also provide Mapping Change Log output (sheet or separate export according to PO
 
 Upcoming Phase Out notation must remain visible in exported hierarchy. Original workbook formatting should be preserved where reasonably possible in the POC.
 
-## 14. Persistence for POC
+## 15. Persistence for POC
 Online Baseline must not be cleared by repeated test uploads or test-data resets. For a standalone browser POC, browser persistence such as IndexedDB may be used so the baseline can survive page refresh/reopen; production implementation will use server/database persistence.
 
-## 15. POC UI guidance
+## 16. POC UI guidance
 - Clearly separate Online Baseline upload from Test Excel upload.
 - Always display Online Baseline filename after successful upload.
 - Converted Data and Original Data should be visible on the same page (upper/lower sections) for comparison.
 - Within each section, Standard / Virtual may use tabs when both exist.
 - Provide clear status badges/messages for Valid, Needs Review, Required Action.
+- Show Suggested Change Command and its reason/evidence when Change Command is blank or inconsistent.
+- Provide Accept Suggestion control.
 - Provide Primary Source selector for Case 3.
 - Provide Confirm Mapping button; disable while unresolved validation issues remain.
 - Provide export/download controls.
 
-## 16. Scope note
+## 17. POC reference test files
+The initial POC is intended to be validated using these business snapshots supplied for development:
+- **Baseline:** PD Hierarchy established on `2025/12/31` for the 2026 hierarchy.
+- **Test hierarchy:** hierarchy snapshot dated `2026/07/17`, where Change Command may be blank and the system should derive suggestions by comparison with the Baseline.
+
+The test hierarchy is not itself the Online Baseline and must never replace the Baseline implicitly.
+
+## 18. Scope note
 This POC validates conversion and mapping behavior. Formal DB writes are out of scope. Database schema is documented separately for future system integration.
