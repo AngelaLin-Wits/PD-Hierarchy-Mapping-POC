@@ -77,7 +77,41 @@ The system must not require users to separately issue child-level Move commands 
 
 If an entity keeps the same name but is reassigned to a different parent, the internal implementation may use the same relationship-reassignment mechanics as Merge. The user-facing description should clearly state the reassignment (for example, `PD-X reassigned from MD-A to MD-B`) rather than introducing a separate Move action.
 
-## 8. Rename / Merge — mandatory batch evaluation
+## 8. No physical Delete / hierarchy lifecycle rules
+**Physical Delete is prohibited for hierarchy processing.** Historical hierarchy entities must be retained rather than removed from the data model. The only special exception is MD, described below.
+
+### PDL
+- PDL is never deleted.
+- When a PDL is no longer used, it follows the **Phase Out** lifecycle.
+- Upcoming Phase Out and actual Phase Out are different states; Upcoming Phase Out is annotation only.
+
+### PD
+- PD is never deleted.
+- If a PD no longer has any active/remaining PDL underneath it, the PD is considered **disabled/inactive** rather than deleted.
+- Its identity/name/history remains available.
+
+### PG and other parent hierarchy levels
+- The same principle applies upward: hierarchy nodes are not physically deleted merely because they no longer have active descendants.
+- They become disabled/inactive as applicable, while historical identity and hierarchy history are retained.
+
+### MD — special exception
+MD is the only hierarchy level where a user may perform a business-level **Delete MD** operation. However, this does **not** mean physically deleting descendant hierarchy data.
+
+The semantics of Delete MD are:
+- Remove/clear the MD name/node representation from the resulting hierarchy.
+- Do not delete its PDs, PDLs, PGs, or other hierarchy entities.
+- Preserve all descendant entities and re-establish their valid hierarchy relationships according to the converted target structure.
+- The operation must never cascade into physical deletion of PD/PDL or other hierarchy records.
+
+For the POC, `Delete MD` should therefore be treated as a special MD-level transformation, not a generic database DELETE action.
+
+### Validation
+- Generic `Delete PG`, `Delete PD`, and `Delete PDL` commands are invalid and must be rejected/flagged for review.
+- `Delete PDL` should be redirected conceptually to the appropriate Phase Out process.
+- A PD with no remaining PDL should be represented as disabled/inactive, not deleted.
+- Any transformation that empties a higher-level node should preserve the node/history and mark it inactive as applicable, except for the special MD name-removal rule above.
+
+## 9. Rename / Merge — mandatory batch evaluation
 Rename/Merge determination MUST use **Batch Evaluation**, never sequential row-by-row state mutation.
 
 Before conversion, create an immutable snapshot of the Online PD Hierarchy. Parse the complete set of Excel change commands first, group them by `Hierarchy Level + Target`, evaluate rules, then generate Converted Data.
@@ -119,7 +153,7 @@ If Primary Source = IDS:
 
 Primary Source changes action semantics/logging but not the final hierarchy result.
 
-## 9. Change Command validation
+## 10. Change Command validation
 Excel Change Description/Action represents the user's declared intent but must not be executed unconditionally.
 
 Validate it against Online Baseline + Mapping Rules:
@@ -132,20 +166,22 @@ Examples:
 - Baseline IPMG absent; Excel says `Merge IPSG into IPMG` → suggest `Rename IPSG to IPMG`.
 - Baseline IPMG exists; Excel says `Rename IDS to IPMG` → suggest `Merge IDS into IPMG`.
 - Baseline IPMG absent; Excel says both `Rename IPSG to IPMG` and `Rename IDS to IPMG` → Required Action: select Primary Source.
+- Excel declares generic Delete for PG/PD/PDL → invalid/Needs Review; use lifecycle rules instead.
 
-## 10. Manual editing and logs
+## 11. Manual editing and logs
 - Converted Data must support manual editing of hierarchy values.
 - A manual hierarchy change should be recorded separately as a manual edit/audit event with before/after values and source `Manual Edit`.
 - Upcoming Phase Out annotation alone must not create a log.
 - Formal Mapping Change Log is generated when Confirm Mapping compares final Converted Data to Online Baseline.
 - Do not generate a separate `Move` action in the log. Reassignment should be represented using the applicable Merge/reassignment semantics and a clear before/after hierarchy path.
+- Never generate a physical-delete operation for PG/PD/PDL from the POC output.
 
-## 11. Mapping evidence / recommendation (POC)
+## 12. Mapping evidence / recommendation (POC)
 PDL is the stable comparison basis. Where feasible, show evidence such as matching PDLs and overlap ratio to explain suggested mappings. Recommendations are advisory; do not automatically infer business semantics such as Rename vs Merge when the deterministic rules require user input.
 
 Example evidence: `3 / 3 PDL matched (100%)` plus the relevant PDL list.
 
-## 12. Export
+## 13. Export
 Export the final converted hierarchy in Excel-compatible workbook format while preserving the expected layout as faithfully as possible.
 
 At minimum keep separate worksheets for:
@@ -156,10 +192,10 @@ Also provide Mapping Change Log output (sheet or separate export according to PO
 
 Upcoming Phase Out notation must remain visible in exported hierarchy. Original workbook formatting should be preserved where reasonably possible in the POC.
 
-## 13. Persistence for POC
+## 14. Persistence for POC
 Online Baseline must not be cleared by repeated test uploads or test-data resets. For a standalone browser POC, browser persistence such as IndexedDB may be used so the baseline can survive page refresh/reopen; production implementation will use server/database persistence.
 
-## 14. POC UI guidance
+## 15. POC UI guidance
 - Clearly separate Online Baseline upload from Test Excel upload.
 - Always display Online Baseline filename after successful upload.
 - Converted Data and Original Data should be visible on the same page (upper/lower sections) for comparison.
@@ -169,5 +205,5 @@ Online Baseline must not be cleared by repeated test uploads or test-data resets
 - Provide Confirm Mapping button; disable while unresolved validation issues remain.
 - Provide export/download controls.
 
-## 15. Scope note
+## 16. Scope note
 This POC validates conversion and mapping behavior. Formal DB writes are out of scope. Database schema is documented separately for future system integration.
