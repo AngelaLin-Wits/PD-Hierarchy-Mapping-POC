@@ -1,257 +1,128 @@
 # PD Hierarchy Mapping POC — Functional Specification
 
 ## 1. Purpose
-Build a browser-based POC for uploading, converting, reviewing, validating, confirming, and exporting PD Hierarchy Excel data. The POC must preserve the current online hierarchy as an immutable comparison baseline while allowing users to repeatedly upload test Excel files.
+Build a browser-based POC for uploading a Test PD Hierarchy Excel, reviewing its Change Commands, producing editable Converted Data, confirming mapping, and exporting the converted workbook. An Online PD Hierarchy Baseline is maintained as a separate persistent dataset, but it does **not** drive Mapping Review or Converted Data generation.
 
 ## 2. Data roles
 The tool maintains three distinct datasets:
 
-1. **Online PD Hierarchy (Baseline)** — current production hierarchy. Upload separately and display the uploaded filename. Test uploads, conversion, editing, and reset of test data must never delete this baseline. It is replaced only when the user explicitly uploads another Online PD Hierarchy file.
-2. **Original Data** — the current test Excel exactly as uploaded; read-only and used for comparison.
-3. **Converted Data** — the transformed hierarchy after applying commands/rules; editable by the user. Manual changes must immediately rebuild/reorganize hierarchy relationships where applicable.
+1. **Online PD Hierarchy (Baseline)** — separately uploaded current production hierarchy. It is persistent and is replaced/cleared only by an explicit user action. Test upload/reset must never clear it. **Baseline is not used to infer, validate, suggest, or execute Change Commands for the Test mapping flow.**
+2. **Original Data** — the current Test Excel exactly as uploaded; read-only.
+3. **Converted Data** — starts as a copy of Original Data and is transformed only by Change Commands from the Test Excel that the user accepts, plus explicit manual edits made in Converted Data.
 
-The page should show Converted Data and Original Data in the same page for easy comparison.
+Converted Data is displayed above Original Data on the same page for direct comparison.
 
-## 3. Upload / workflow
-1. Upload Online PD Hierarchy baseline.
-2. Upload a test PD Hierarchy Excel. Test Excel can be uploaded repeatedly and its Change Command may be blank.
-3. Parse the complete workbook and compare the uploaded hierarchy against the immutable Online Baseline.
-4. Infer hierarchy differences and generate Suggested Change Command(s) where deterministic rules allow.
-5. Show Original Data and Converted Data.
-6. Allow users to review/accept/edit suggested commands and manually edit Converted Data.
-7. Validate declared or accepted Change Commands against mapping rules and Online Baseline.
-8. Resolve warnings and required actions.
-9. User clicks **Confirm Mapping**.
-10. Compare final Converted Data against the immutable Online Baseline.
-11. Generate Mapping Change Log / Confirm Mapping output.
-12. Export converted Excel while preserving required workbook structure.
+## 3. Authoritative Mapping workflow
+1. Upload Baseline if required for the separate baseline dataset. Baseline is not a prerequisite for Test Mapping Review.
+2. Upload Test PD Hierarchy Excel.
+3. Read **Change Command from the Test Excel itself**.
+4. Rows with blank Change Command do not create Mapping Review items and do not receive an automatically inferred command.
+5. Parse each nonblank Change Command and show it in Mapping Review.
+6. User reviews each command and chooses **Accept**, **Edit**, or **No Change**.
+7. Accepted commands are executed against a fresh copy of the **Test Original Data** to build Converted Data.
+8. Editing a command causes it to be parsed/reviewed again before it can be accepted.
+9. No Change means the Test Excel command is explicitly not executed for this conversion.
+10. Converted Data remains editable for manual corrections.
+11. Confirm Mapping is enabled only when every nonblank Test Change Command has a resolved review result and there are no Pending Review / Needs Review items.
+12. Confirm Mapping produces the formal Mapping Change Log from accepted Test Change Commands.
+13. Export Converted Data using the original Test workbook as the template.
 
-Confirm Mapping must be disabled while unresolved `Needs Review` or `Required Action` records exist.
+**Core rule:** `Test Original Data + Accepted Test Change Commands = Converted Data`.
 
-## 4. Standard and Virtual hierarchy
-- The source workbook keeps virtual hierarchy in separate worksheet(s); export must also keep virtual hierarchy in separate worksheet(s).
-- Do not merge Standard and Virtual hierarchy into one Excel sheet.
-- Internally tag imported rows with `HierarchyType = Standard | Virtual` based on their source worksheet/configuration.
-- Standard data compares only with Standard data; Virtual compares only with Virtual.
-- Do not determine Virtual merely by worksheet ordinal. Use configured/recognized sheet names.
-- Database currently provides `Virtual` at PG and MD levels. Existing compatibility behavior must be preserved.
-- The POC does not need to add a visible `HierarchyType` Excel column unless the existing workbook specification requires it.
+## 4. Mapping Review
+Mapping Review must **not compare Test hierarchy differences with Baseline to generate Suggested Change Commands**.
 
-## 5. Upcoming Phase Out PDL
-- A PDL shown in parentheses, e.g. `(PDL ABC)`, means **Upcoming Phase Out**, not already phased out.
-- It remains an active/effective PDL for hierarchy mapping and comparison.
-- Preserve the marker faithfully in Converted Data and exported Excel.
-- Upcoming Phase Out is display/annotation only and must **not generate Mapping Change Log or status-change log entries**.
-- Existing DB `IsPhaseOut`/`PhaseOutDate` represents actual Phase Out and must not be set merely because a PDL is marked Upcoming Phase Out.
+For each nonblank Test Change Command, display enough information to review the command, including:
+- source worksheet / row
+- hierarchy level
+- source
+- Change Command
+- parsed command/result
+- review status
+- actions
 
-## 6. Effective date and descriptions
-Provide an input for **Planned Go-Live / Effective Date**.
+Review outcomes:
+- **Accept** — execute the Test Excel Change Command.
+- **Edit** — user changes the command; the edited command must pass command parsing/validation and then be accepted.
+- **No Change** — explicitly do not execute this command. It is considered reviewed and does not block Confirm Mapping.
 
-Maintain two description concepts:
-- **Change Command** — structured/fixed action semantics for system processing.
-- **Change Description** — user-readable description, defaulted from the action/command and freely editable.
+Statuses:
+- **Pending Review** — syntactically recognized command waiting for user decision.
+- **Valid** — accepted recognized command.
+- **Needs Review** — unrecognized/invalid command requiring correction or No Change.
+- **No Change** — explicitly rejected/not executed.
 
-Example user-facing description:
-`2026/10/01 new PDL 123 to PD AAA`
+`Confirm Mapping` is enabled when `Pending Review = 0` and `Needs Review = 0`. A Test Excel with no Change Commands may be confirmed without Mapping Review items.
 
-## 7. Supported hierarchy actions
-The POC action model is intentionally small:
+## 5. Change Command behavior
+Supported action model:
 - **Add**
 - **Rename**
 - **Merge**
-- **Face Out**
+- **Face Out / Phase Out**
+- special **Delete MD** transformation
 
-**Move is NOT a separate action.** Hierarchy relocation/reassignment is handled by the level-aware Merge operation.
+There is no separate Move action. Hierarchy reassignment is represented by the applicable Merge/reassignment command.
 
-Upcoming Phase Out is an annotation only, not an action.
+Merge is level-aware and subtree-aware. Parent-level Merge semantics carry the applicable descendant hierarchy. The production implementation must execute hierarchy relationship changes according to the command semantics rather than relying on Baseline inference.
 
-### Merge is level-aware and subtree-aware
-Every Merge command must identify the hierarchy level being operated on. The operation is completed at that level, and the complete descendant subtree follows that node as applicable.
+## 6. Lifecycle rules
+Physical Delete is prohibited for normal PG/PD/PDL hierarchy processing.
 
-Examples:
-- **PG-level Merge**: merging `IDS` into `IPMG` causes the hierarchy under IDS (MD → PD → PDL) to be reassigned/combined under IPMG as part of the PG-level operation.
-- **MD-level Merge**: merging `MD-A` into `MD-B` carries the descendant PD → PDL hierarchy with it.
-- **PD-level Merge**: merging `PD-A` into `PD-B` carries descendant PDLs with it.
-- **PDL-level Merge**: affects the PDL-level entity/mapping only; there is no lower subtree.
+- PDL is never physically deleted; no longer used PDL follows Phase Out lifecycle.
+- PD and parent hierarchy entities retain identity/history and may become inactive/disabled.
+- MD is the special business-level Delete case. `Delete MD` removes/clears the MD representation without cascading physical deletion of PD/PDL descendants.
 
-The system must not require users to separately issue child-level Move commands when a parent-level Merge already determines the descendant relocation.
+A PDL shown in parentheses, e.g. `(PDL ABC)`, means **Upcoming Phase Out**. It remains an annotation and must be preserved in Converted Data/export. The annotation alone must not create a Mapping Change Log entry or set actual DB phase-out status.
 
-If an entity keeps the same name but is reassigned to a different parent, the internal implementation may use the same relationship-reassignment mechanics as Merge. The user-facing description should clearly state the reassignment (for example, `PD-X reassigned from MD-A to MD-B`) rather than introducing a separate Move action.
+## 7. Planned Go-Live Date and descriptions
+Provide **Planned Go-Live Date**.
 
-## 8. No physical Delete / hierarchy lifecycle rules
-**Physical Delete is prohibited for hierarchy processing.** Historical hierarchy entities must be retained rather than removed from the data model. The only special exception is MD, described below.
+Maintain:
+- **Change Command** — structured action used for processing.
+- **Change Description** — human-readable description; may default from the command and is editable.
 
-### PDL
-- PDL is never deleted.
-- When a PDL is no longer used, it follows the **Phase Out** lifecycle.
-- Upcoming Phase Out and actual Phase Out are different states; Upcoming Phase Out is annotation only.
+## 8. Manual editing and logs
+Converted Data is editable. Manual changes should be captured as separate audit events with before/after values and source `Manual Edit`.
 
-### PD
-- PD is never deleted.
-- If a PD no longer has any active/remaining PDL underneath it, the PD is considered **disabled/inactive** rather than deleted.
-- Its identity/name/history remains available.
+Formal Mapping Change Log is generated only after Confirm Mapping. It contains accepted mapping commands; No Change items are excluded. Upcoming Phase Out annotation alone is excluded.
 
-### PG and other parent hierarchy levels
-- The same principle applies upward: hierarchy nodes are not physically deleted merely because they no longer have active descendants.
-- They become disabled/inactive as applicable, while historical identity and hierarchy history are retained.
+## 9. Standard / Virtual worksheets
+Preserve the Test workbook's worksheet structure. Standard and Virtual hierarchy worksheets remain separate. Do not merge them during conversion or export. Do not invent a visible HierarchyType column unless the workbook requires it.
 
-### MD — special exception
-MD is the only hierarchy level where a user may perform a business-level **Delete MD** operation. However, this does **not** mean physically deleting descendant hierarchy data.
+## 10. Export and formatting
+Export uses the **original Test Excel workbook as the template** and writes Converted Data values back into the corresponding worksheets.
 
-The semantics of Delete MD are:
-- Remove/clear the MD name/node representation from the resulting hierarchy.
-- Do not delete its PDs, PDLs, PGs, or other hierarchy entities.
-- Preserve all descendant entities and re-establish their valid hierarchy relationships according to the converted target structure.
-- The operation must never cascade into physical deletion of PD/PDL or other hierarchy records.
+The implementation should preserve, as faithfully as the browser Excel library permits:
+- worksheet names and order
+- cell formatting / fill colors
+- borders
+- fonts
+- alignment
+- column widths and row heights
+- merged cells
+- number/date formats
+- Standard / Virtual sheet separation
+- Upcoming Phase Out parentheses
 
-For the POC, `Delete MD` should therefore be treated as a special MD-level transformation, not a generic database DELETE action.
+Mapping Change Log may be appended as a new worksheet with system-defined formatting.
 
-### Validation
-- Generic `Delete PG`, `Delete PD`, and `Delete PDL` commands are invalid and must be rejected/flagged for review.
-- `Delete PDL` should be redirected conceptually to the appropriate Phase Out process.
-- A PD with no remaining PDL should be represented as disabled/inactive, not deleted.
-- Any transformation that empties a higher-level node should preserve the node/history and mark it inactive as applicable, except for the special MD name-removal rule above.
+The system should modify only values required by mapping/manual editing and should not intentionally alter unrelated workbook formatting. The current browser POC uses SheetJS Community Edition, so complex Excel style round-tripping may have library limitations; production implementation should use an Excel library/approach that guarantees the required formatting fidelity.
 
-## 9. Rename / Merge — mandatory batch evaluation
-Rename/Merge determination MUST use **Batch Evaluation**, never sequential row-by-row state mutation.
+## 11. UI
+- EAI visual style.
+- Baseline upload and Test upload remain separate.
+- Planned Go-Live Date, Reset Test, Replace/Clear Baseline remain available.
+- Converted Data appears above Original Data; they are not separate page tabs.
+- Worksheet tabs inside each section may be used for actual workbook sheets such as Standard / Virtual.
+- BG, MD, and PD cells do not wrap; horizontal scrolling is used when necessary.
+- Original Data is read-only.
+- Converted Data is editable.
 
-Before conversion, create an immutable snapshot of the Online PD Hierarchy. Parse the complete set of Excel hierarchy data and any supplied Change Commands first, group differences by `Hierarchy Level + Target`, evaluate rules, then generate Converted Data and command suggestions.
+## 12. Baseline persistence
+Baseline survives Test uploads, Test reset, and page refresh/reopen where browser persistence is available. Only explicit Replace/Clear Baseline or a new Baseline upload changes it.
 
-Target existence is always determined against the Online Baseline Snapshot at the same hierarchy level. It must never be determined from a Converted Data state modified by an earlier Excel row. Therefore changing Excel row order must not change the result.
+**Important separation:** Baseline persistence does not imply Baseline participation in Mapping Review. The Test mapping flow is driven by the Test Excel's own Change Commands.
 
-### Case 1 — Single Source → New Target
-If Target does not exist in Online Baseline:
-- `IPSG → IPMG`
-- Baseline: IPSG exists; IPMG does not exist
-- Suggested/Result: `Rename IPSG to IPMG`
-
-### Case 2 — Target already exists
-If Target exists in Online Baseline, source(s) are merged into the existing Target.
-- `IDS → IPMG`
-- Baseline: IDS exists; IPMG exists
-- Suggested/Result: `Merge IDS into IPMG`
-
-This rule also applies to multiple sources mapped to an already-existing target: all sources are Merge.
-
-### Case 3 — Multiple Sources → New Target
-If multiple sources map to the same Target and the Target does not exist in Online Baseline, the system must not guess which source owns the Rename.
-
-Example:
-- `IPSG → IPMG`
-- `IDS → IPMG`
-- Baseline: IPMG does not exist
-
-Show:
-`Multiple sources are mapped to the new target "IPMG". Please select a Primary Source.`
-
-If Primary Source = IPSG:
-- `Rename IPSG to IPMG`
-- `Merge IDS into IPMG`
-
-If Primary Source = IDS:
-- `Rename IDS to IPMG`
-- `Merge IPSG into IPMG`
-
-Primary Source changes action semantics/logging but not the final hierarchy result.
-
-## 10. Suggested Change Command workflow
-**Change Command is allowed to be blank in an uploaded Test Excel.** A blank command must not prevent the workbook from being uploaded or compared.
-
-When Change Command is blank:
-1. Compare the uploaded hierarchy against the immutable Online Baseline.
-2. Detect hierarchy differences at the applicable level.
-3. Apply the deterministic mapping rules in this specification.
-4. Generate a **Suggested Change Command** where the rule is unambiguous.
-5. Display the suggestion, reason/evidence, and review status to the user.
-6. The user may **Accept Suggestion** or manually modify/select the final Change Command.
-7. Only after user acceptance/review does the suggestion become the effective Change Command for Confirm Mapping.
-
-The system must not silently write a suggestion as though it were user-confirmed.
-
-Suggested commands may include, as applicable:
-- `Add ...`
-- `Rename ... to ...`
-- `Merge ... into ...`
-- `Face Out ...`
-- special MD-level `Delete MD ...` transformation when the hierarchy difference clearly satisfies the MD rule.
-
-For **Multiple Sources → New Target**, the system must not automatically choose a Primary Source. Status is `Required Action`; after the user selects the Primary Source, the system generates the corresponding Rename + Merge commands.
-
-Recommended review-grid columns:
-- **Change Command** — current/confirmed command; may initially be blank.
-- **Suggested Change Command** — system recommendation.
-- **Reason / Evidence** — why the system made the recommendation, including Baseline target existence and/or PDL overlap where applicable.
-- **Status** — `Valid`, `Needs Review`, or `Required Action`.
-- **Action** — e.g. `Accept Suggestion`, Edit, or Select Primary Source.
-
-Example:
-
-| Change Command | Suggested Change Command | Reason / Evidence | Status |
-|---|---|---|---|
-| *(Blank)* | `Rename IPSG to IPMG` | Single Source → New Target; IPMG absent in Baseline | Needs Review |
-| *(Blank)* | `Merge IDS into IPMG` | Target IPMG exists in Baseline | Needs Review |
-| *(Blank)* | Pending Primary Source | Multiple Sources → New Target | Required Action |
-
-## 11. Change Command validation
-A Change Command supplied in Excel or entered/accepted by the user represents declared intent but must not be executed unconditionally.
-
-Validate it against Online Baseline + Mapping Rules:
-
-- **Valid** — declared/accepted action matches rule; normal conversion.
-- **Warning / Needs Review** — declared action conflicts with rule, or a system suggestion has not yet been accepted. Display the current Change Command, reason, and Suggested Change Command. Never silently rewrite it; user must confirm/correct it.
-- **Required Action** — e.g. Multiple Sources → New Target; user must choose Primary Source.
-
-Examples:
-- Baseline IPMG absent; Excel says `Merge IPSG into IPMG` → suggest `Rename IPSG to IPMG`.
-- Baseline IPMG exists; Excel says `Rename IDS to IPMG` → suggest `Merge IDS into IPMG`.
-- Baseline IPMG absent; Excel says both `Rename IPSG to IPMG` and `Rename IDS to IPMG` → Required Action: select Primary Source.
-- Excel declares generic Delete for PG/PD/PDL → invalid/Needs Review; use lifecycle rules instead.
-
-## 12. Manual editing and logs
-- Converted Data must support manual editing of hierarchy values.
-- A manual hierarchy change should be recorded separately as a manual edit/audit event with before/after values and source `Manual Edit`.
-- Upcoming Phase Out annotation alone must not create a log.
-- Formal Mapping Change Log is generated when Confirm Mapping compares final Converted Data to Online Baseline.
-- Do not generate a separate `Move` action in the log. Reassignment should be represented using the applicable Merge/reassignment semantics and a clear before/after hierarchy path.
-- Never generate a physical-delete operation for PG/PD/PDL from the POC output.
-
-## 13. Mapping evidence / recommendation (POC)
-PDL is the stable comparison basis. Where feasible, show evidence such as matching PDLs and overlap ratio to explain suggested mappings. Recommendations are advisory; do not automatically infer business semantics such as Rename vs Merge when the deterministic rules require user input.
-
-Example evidence: `3 / 3 PDL matched (100%)` plus the relevant PDL list.
-
-## 14. Export
-Export the final converted hierarchy in Excel-compatible workbook format while preserving the expected layout as faithfully as possible.
-
-At minimum keep separate worksheets for:
-- Standard PD Hierarchy
-- Virtual Hierarchy
-
-Also provide Mapping Change Log output (sheet or separate export according to POC implementation).
-
-Upcoming Phase Out notation must remain visible in exported hierarchy. Original workbook formatting should be preserved where reasonably possible in the POC.
-
-## 15. Persistence for POC
-Online Baseline must not be cleared by repeated test uploads or test-data resets. For a standalone browser POC, browser persistence such as IndexedDB may be used so the baseline can survive page refresh/reopen; production implementation will use server/database persistence.
-
-## 16. POC UI guidance
-- Clearly separate Online Baseline upload from Test Excel upload.
-- Always display Online Baseline filename after successful upload.
-- Converted Data and Original Data should be visible on the same page (upper/lower sections) for comparison.
-- Within each section, Standard / Virtual may use tabs when both exist.
-- Provide clear status badges/messages for Valid, Needs Review, Required Action.
-- Show Suggested Change Command and its reason/evidence when Change Command is blank or inconsistent.
-- Provide Accept Suggestion control.
-- Provide Primary Source selector for Case 3.
-- Provide Confirm Mapping button; disable while unresolved validation issues remain.
-- Provide export/download controls.
-
-## 17. POC reference test files
-The initial POC is intended to be validated using these business snapshots supplied for development:
-- **Baseline:** PD Hierarchy established on `2025/12/31` for the 2026 hierarchy.
-- **Test hierarchy:** hierarchy snapshot dated `2026/07/17`, where Change Command may be blank and the system should derive suggestions by comparison with the Baseline.
-
-The test hierarchy is not itself the Online Baseline and must never replace the Baseline implicitly.
-
-## 18. Scope note
-This POC validates conversion and mapping behavior. Formal DB writes are out of scope. Database schema is documented separately for future system integration.
+## 13. Scope
+This POC validates browser-side command review, conversion, editing, confirmation, logging, and export. Formal database writes are out of scope. Database schema is documented separately for future integration.
