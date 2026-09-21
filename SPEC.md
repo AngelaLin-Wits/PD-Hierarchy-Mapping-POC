@@ -20,7 +20,7 @@ Converted Data is above Original Data on the same page.
 7. Apply Case 1 / Case 2 / Case 3 rules below independently inside Standard and Virtual hierarchy types.
 8. User resolves Required Action / Needs Review, then Accepts, Edits, or selects No Change.
 9. An accepted command is immediately reflected in Converted Data so User can compare the result before final confirmation.
-10. User may manually edit Converted Data. A newly entered hierarchy value may generate an Add Change Command only after explicit User confirmation.
+10. User may manually edit Converted Data. Add, Delete MD, and hierarchy Parent Reassignment may generate a Change Command only after explicit User confirmation. Once confirmed in Converted Data, the generated Mapping Review item is immediately Valid/accepted; a second Accept is not required.
 11. Confirm Mapping only when all review items are resolved.
 12. Generate Mapping Change Log and export using the Test workbook as template.
 
@@ -71,12 +71,12 @@ Proposed command:
 
 `Add PDL "PDL Angela"`
 
-If User confirms, the Add command is inserted into Mapping Review as **Pending Review**. It still requires Accept before it becomes a confirmed mapping item. If User declines, no Change Command is created; the manual Converted Data edit remains an explicit manual edit/audit event.
+If User confirms, the Add command is written into that Converted Data row's Change Command column and inserted into Mapping Review as **Valid** with accepted decision. No second Accept is required. If User declines, no Change Command or Mapping Review item is created; the manual Converted Data edit remains an explicit manual edit/audit event.\n\nIf User clears an existing MD in Converted Data, prompt before generating `Delete MD "Name"`. Only MD supports Delete; BG / PD / PDL must not be converted to Delete. Delete MD is a logical hierarchy transformation only and must not physically delete descendants.\n\nIf User changes an existing parent assignment, for example PDL `UNO1` from PD `UNO` to PD `IPC`, prompt with the old and new parent. After confirmation, write a Reassignment Change Command into Converted Data and create a **Valid** Mapping Review item. This is handled under Merge / Reassignment semantics and does not introduce a separate Move action.
 
 Manual editing must never silently create a Change Command without User confirmation.
 
 ## 8. Supported actions and hierarchy semantics
-Supported actions: Add, Rename, Merge, Face Out / Phase Out, and special Delete MD. There is no separate Move action.
+Supported actions: Add, Rename, Merge, Face Out / Phase Out, and special Delete MD. Parent changes are represented as Reassignment under the Merge / Reassignment semantics; there is no separate Move action.
 
 Both Standard and Virtual use the same hierarchy levels and Mapping Engine: **BG → MD → PD → PDL**. Mapping execution remains isolated by Hierarchy Type.
 
@@ -88,7 +88,7 @@ A parenthesized PDL such as `(PDL ABC)` means Upcoming Phase Out annotation. Pre
 Provide Planned Go-Live Date. Maintain Change Command for processing and editable Change Description for human-readable explanation.
 
 ## 10. Logs
-Formal Mapping Change Log is generated only after Confirm Mapping from accepted final commands. No Change and Upcoming Phase Out annotation-only items are excluded. Accepted commands generated from confirmed Converted Data manual additions are included, with evidence identifying their manual-edit origin.
+Formal Mapping Change Log is generated only after Confirm Mapping from accepted final commands. No Change and Upcoming Phase Out annotation-only items are excluded. Valid/accepted commands generated from confirmed Converted Data manual Add / Delete MD / Reassignment are included, with evidence identifying their manual-edit origin.
 
 ## 11. Standard / Virtual worksheets
 Standard and Virtual are two independent hierarchy datasets stored as separate worksheets in the same Excel workbook. Both use **BG → MD → PD → PDL** and the same Rename / Merge / Add / Delete / Case 1 / Case 2 / Case 3 rules.
