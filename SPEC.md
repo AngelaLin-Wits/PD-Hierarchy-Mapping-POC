@@ -22,7 +22,7 @@ Converted Data is above Original Data on the same page.
 9. An accepted command is immediately reflected in Converted Data so User can compare the result before final confirmation.
 10. User may manually edit Converted Data. Add, Delete MD, and hierarchy Parent Reassignment may generate a Change Command only after explicit User confirmation. Once confirmed in Converted Data, the generated Mapping Review item is immediately Valid/accepted; a second Accept is not required.
 11. Confirm Mapping only when all review items are resolved.
-12. Generate Mapping Change Log and export using the Test workbook as template.
+12. After Confirm Mapping, compare the final Converted Data against the corresponding Online Baseline by Hierarchy Type and generate the Confirmed Mapping Change Log from the actual differences. Export uses the Test workbook as template.
 
 **Core conversion rule:** `Test Original Data + Accepted final Change Commands + explicit manual edits = Converted Data`.
 
@@ -88,7 +88,7 @@ A parenthesized PDL such as `(PDL ABC)` means Upcoming Phase Out annotation. Pre
 Provide Planned Go-Live Date. Maintain Change Command for processing and editable Change Description for human-readable explanation.
 
 ## 10. Logs
-Formal Mapping Change Log is generated only after Confirm Mapping from accepted final commands. No Change and Upcoming Phase Out annotation-only items are excluded. Valid/accepted commands generated from confirmed Converted Data manual Add / Delete MD / Reassignment are included, with evidence identifying their manual-edit origin.
+Formal Mapping Change Log is generated only after Confirm Mapping by comparing **final Converted Data vs Online Baseline**, independently by Hierarchy Type. It is the deployment-difference log, not a copy of Mapping Review history. The log records actual Add, Parent Reassignment, Delete MD and PDL Phase Out differences detectable from the final hierarchy. No Change and annotation-only Upcoming Phase Out items are excluded unless they produce an actual Baseline-to-Converted difference.
 
 ## 11. Standard / Virtual worksheets
 Standard and Virtual are two independent hierarchy datasets stored as separate worksheets in the same Excel workbook. Both use **BG → MD → PD → PDL** and the same Rename / Merge / Add / Delete / Case 1 / Case 2 / Case 3 rules.
