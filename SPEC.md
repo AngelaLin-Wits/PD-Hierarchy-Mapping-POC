@@ -110,3 +110,21 @@ Use EAI visual style. Baseline/Test upload remain separate. Keep Planned Go-Live
 
 ## 15. Persistence and scope
 Baseline survives Test uploads/reset and browser refresh where available. Only explicit replace/clear changes it. Formal DB writes are out of POC scope.
+
+## 16. Official / Test entry flow (2026-10-05)
+- `index.html` opens **PD Hierarchy Official** by default, using the supplied Official/Test list reference style.
+- The OFFICIAL / TEST switch changes the list without opening Mapping.
+- Test's **+ New Test** opens `mapping.html`. Upload and review remain on the Mapping page.
+- **SAVE** requires an uploaded Test and resolved review decisions. It persists a separate Test record and returns to the Test list.
+- Test **CONTENT** displays the saved Converted Data read-only. **EDIT** reopens a saved, unpromoted record with review decisions, Primary Sources, original workbook, and manual adjustments restored.
+- Test **GO LIVE** supplies that selected record to the existing Go Live page. COMPARE reads the current Official Baseline for the selected year. Confirmation promotes the workbook to the browser-only Official record.
+- Official and Test lists start empty. **Load Official Excel (POC)** provides the baseline for testing without fabricating production records or connecting to the real system. Baseline must be loaded before uploading a Test for that year.
+- Local storage retains both lists across refresh. SAVE errors leave the Mapping page open; unsaved navigation requires confirmation.
+- This POC persists to the current browser only. Backend APIs, multi-user access, production deployment transactions and the enhanced Rename/Merge formal log design remain separate work.
+
+## 17. Official Content and Excel download (2026-10-05)
+- Go Live copies the selected saved Test's Converted Data and original uploaded Excel template to the year's Official record. It retains the Test snapshot and stores `sourceTestId` on Official.
+- Official CONTENT opens a dedicated page matching the provided reference: Year, Remark, Effective Date, BACK, Data Filter, hierarchy table and **Download All Data**.
+- Filters and Standard/Virtual tabs affect display only. Download All Data always includes all rows and every worksheet.
+- For `.xlsx`, export patches changed hierarchy cell values into the original uploaded OOXML package rather than rebuilding the workbook. Original sheets, styles, fills, borders, widths, row attributes and unrelated package parts are retained. Inserted rows use nearby row formatting and update merge row ranges.
+- Legacy `.xls` may be read for review, but format-preserving Official download requires an original `.xlsx` template. Complex formula/table references affected by inserted rows require additional validation against the user's actual Excel template.
