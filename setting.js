@@ -26,12 +26,12 @@ function showSheet(i) {
   $('contentTable').innerHTML = '<table><thead><tr>'+headers.map(x=>`<th class="${columnClass(x)}">${esc(x)}</th>`).join('')+'</tr></thead><tbody>'+sheet.rows.slice(1).map(row=>'<tr>'+headers.map((header,c)=>`<td class="${columnClass(header)}">${esc(row[c])}</td>`).join('')+'</tr>').join('')+'</tbody></table>';
 }
 $('modeToggle').onclick = () => { mode = mode === 'official' ? 'test' : 'official'; history.replaceState(null,'', mode === 'test' ? '?view=test' : location.pathname); render(); };
-$('addTest').onclick = () => { location.href = 'mapping.html?new=1'; };
+$('addTest').onclick = () => { location.href = 'mapping.html?new=1&v=20261005-head2'; };
 $('recordsBody').onclick = e => {
   const button = e.target.closest('button[data-action]'); if (!button) return;
   try {
     const record = records().find(x=>x.id===button.dataset.id); if (!record) return;
-    if (button.dataset.action === 'edit') { location.href = 'mapping.html?id='+encodeURIComponent(record.id); return; }
+    if (button.dataset.action === 'edit') { location.href = 'mapping.html?v=20261005-head2&id='+encodeURIComponent(record.id); return; }
     if (button.dataset.action === 'goLive') { localStorage.setItem('pdhGoLivePayload',JSON.stringify(PDHRecords.payload(record))); location.href='go-live.html'; return; }
     if(mode==='official'){location.href='official-content.html?id='+encodeURIComponent(record.id);return;}contentBook = record.state.converted;
     if (!contentBook?.sheets?.length) { alert('尚無階層資料。'); return; }
