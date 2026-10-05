@@ -1,0 +1,34 @@
+/* Integrate Head commands with existing Mapping review decisions. */
+(() => {
+ const H=PDHHeads;
+ const originalParse=parseCommand;
+ parseCommand=cmd=>H.parse(cmd)||originalParse(cmd);
+ const originalApply=applyReview;
+ applyReview=rv=>{const p=parseCommand(rv.command);if(p.action!=='Head'){originalApply(rv);return;}const sh=S.converted.sheets[rv.sheet],c=H.headColumn(sh.rows,p.level),lc=levelCol(p.level),source0=p.source||rv.source||sh.rows[rv.row-1]?.[lc],mapping=S.reviews.find(m=>m.sheet===rv.sheet&&m.level===p.level&&m.decision==='accept'&&['Rename','Merge'].includes(m.parsed?.action)&&key(m.parsed.source)===key(source0)),source=mapping?.parsed.target||source0;if(c<0)return;const list=rv.headEmployees||[];for(let r=1;r<sh.rows.length;r++)if(key(sh.rows[r]?.[lc])===key(source)){H.set(sh,r,c,list);if(r===rv.row-1)sh.rows[r][rv.cmdCol]=rv.command;}};
+ rebuildConverted=()=>{if(!S.test)return;S.converted=JSON.parse(JSON.stringify(S.test));const accepted=S.reviews.filter(x=>x.status==='valid'&&x.decision==='accept'&&x.origin!=='Manual Converted'&&x.origin!=='Add Hierarchy');accepted.filter(x=>x.parsed.action!=='Head').forEach(applyReview);applyManualEdits();applyAddedRows();accepted.filter(x=>x.parsed.action==='Head').forEach(applyReview);};
+ const originalValidate=validateBatch;
+ validateBatch=()=>{originalValidate();for(const rv of S.reviews){const p=parseCommand(rv.command);if(p.action!=='Head'||rv.decision==='nochange')continue;rv.parsed=p;const sh=S.test?.sheets[rv.sheet],lc=levelCol(p.level);rv.source=p.source||sh?.rows[rv.row-1]?.[lc]||'';rv.target=p.target;const c=sh?H.headColumn(sh.rows,p.level):-1;if(c<0||!rv.source||!sh.rows.slice(1).some(r=>key(r[lc])===key(rv.source))&&!S.converted?.sheets[rv.sheet]?.rows.slice(1).some(r=>key(r[lc])===key(rv.source))){rv.status='review';rv.ruleMessage='找不到對應階層或 Head 欄位，請確認指令。';continue;}if(rv.headCommand!==rv.command){rv.headEmployees=null;const matches=H.split(p.target).map(n=>H.exact(n));if(matches.every(x=>x.length===1)){rv.headEmployees=H.unique(matches.flat());rv.headCommand=rv.command;}}if(!rv.headEmployees){rv.status='pending';rv.ruleMessage='請按 Accept，以姓名或 Email 搜尋並指定正確 Head。';}else{rv.ruleMessage=p.message;rv.status=rv.decision==='accept'?'valid':'pending';}}};
+ const originalAccept=accept;
+ accept=async id=>{const rv=S.reviews.find(x=>x.id===id);if(!rv)return;if(rv.parsed.action==='Head'){if(rv.status==='review')return;const list=await PDHHeadsUI.resolve(rv.parsed.target,`${rv.level} ${rv.source} Head`);if(list===null)return;rv.headEmployees=list;rv.command=`Set ${rv.level} Head "${rv.source}" to "${H.text(list)||'Clear'}"`;rv.headCommand=rv.command;rv.parsed=parseCommand(rv.command);rv.target=rv.parsed.target;rv.status='pending';}originalAccept(id);rebuildConverted();renderAll();};
+ $('acceptAll').onclick=async()=>{for(const rv of S.reviews.filter(x=>x.status==='pending'&&x.parsed.valid))await accept(rv.id);};
+ const originalRead=readWorkbook;
+ readWorkbook=(file,cb)=>originalRead(file,async(b,wb,raw)=>{const original=JSON.parse(JSON.stringify(b));if(await PDHHeadsUI.validateBook(b)){cb(b,wb,raw);S.originalBook=original;}});
+ const originalSave=$('saveReview').onclick;
+ $('saveReview').onclick=async()=>{validateBatch();rebuildConverted();if(S.converted&&!await PDHHeadsUI.validateBook(S.converted))return;
+ // Persist validated source cells so rebuildConverted and later EDIT retain identities.
+ if(S.test)for(const sh of S.test.sheets)for(const {c}of H.columns(sh.rows))for(let r=1;r<sh.rows.length;r++){if(!H.verified(sh,r,c)&&H.split(sh.rows[r]?.[c]).length){const list=await PDHHeadsUI.resolve(sh.rows[r][c],`${sh.name} / Row ${r+1}`);if(list===null)return;H.set(sh,r,c,list);}}
+ S.headValidationVersion=1;const finalBook=JSON.parse(JSON.stringify(S.converted)),rebuild=rebuildConverted;rebuildConverted=()=>{S.converted=JSON.parse(JSON.stringify(finalBook));};try{originalSave();}finally{rebuildConverted=rebuild;}};
+ IGNORED.delete('bg head');IGNORED.delete('pg head');IGNORED.delete('md head');IGNORED.delete('pd head');
+ visibleCols=rows=>(rows[0]||[]).map((h,i)=>({h,i})).filter(x=>key(x.h)!=='remark');
+ const originalTable=sheetTable;sheetTable=(book,si,editable)=>{if(!editable)return originalTable(book,si,editable);const sh=book?.sheets[si];if(!sh)return originalTable(book,si,editable);const heads=new Set(H.columns(sh.rows).map(x=>x.c)),cols=visibleCols(sh.rows);return '<table class="hierarchy-table"><thead><tr>'+cols.map(x=>`<th>${esc(x.h)}</th>`).join('')+'</tr></thead><tbody>'+sh.rows.slice(1).map((row,i)=>'<tr>'+cols.map(x=>`<td>${heads.has(x.i)?esc(row[x.i]):`<input value="${esc(row[x.i]??'')}" onchange="cellEdit(${si},${i+1},${x.i},this.value)">`}</td>`).join('')+'</tr>').join('')+'</tbody></table>';};
+ const originalCellEdit=cellEdit;
+ cellEdit=(si,ri,ci,v)=>{if(H.columns(S.converted.sheets[si].rows).some(x=>x.c===ci)){alert('請使用 Head Change Command 變更主管。');renderAll();return;}originalCellEdit(si,ri,ci,v);};
+ const bar=document.createElement('div');bar.className='actions';bar.style.margin='12px 0';bar.innerHTML='<label>Head Change Command：<select id="headRow"></select></label><select id="headLevel"><option>BG</option><option>PG</option><option>MD</option><option>PD</option><option>PDL</option></select><button class="btn" id="headNewCommand">搜尋並指定 Head（可多選／清空）</button><span class="hint">或在 Excel 輸入 MD Head David Li; Julia Wong，清空用 MD Head Clear</span>';
+ $('reviewBody').closest('.table-wrap').before(bar);
+ function rows(){const sh=S.converted?.sheets[S.activeConv];$('headRow').innerHTML=sh?sh.rows.slice(1).map((r,i)=>`<option value="${i+1}">Row ${i+2}: ${esc(r.slice(0,4).join(' / '))}</option>`).join(''):'';}
+ const originalSwitch=switchTab;switchTab=(k,i)=>{originalSwitch(k,i);rows();};
+ const originalRender=renderAll;renderAll=()=>{originalRender();rows();};
+ $('headNewCommand').onclick=async()=>{if(!S.converted){alert('請先上傳 Test Excel。');return;}const si=S.activeConv,sh=S.converted.sheets[si],r=+$('headRow').value,level=$('headLevel').value,c=H.headColumn(sh.rows,level),source=sh.rows[r]?.[levelCol(level)];if(c<0||!source){alert('該列沒有此階層或 Head 欄位。');return;}const list=await PDHHeadsUI.resolve(sh.rows[r][c],`${level} ${source} Head`,true);if(list===null)return;const command=`Set ${level} Head "${source}" to "${H.text(list)||'Clear'}"`,parsed=parseCommand(command);S.reviews.push({id:crypto.randomUUID(),sheet:si,sheetName:sh.name,hierarchyType:sh.hierarchyType,row:r+1,cmdCol:headerIndex(sh.rows,['Change Command'],4),descCol:headerIndex(sh.rows,['Change Description'],5),level,source,target:parsed.target,command,parsed,status:'pending',decision:'',description:'',origin:'Head Command',headEmployees:list,headCommand:command});invalidateConfirm();validateBatch();renderAll();};
+ // Restore existing Review records with the newly supported grammar.
+ for(const rv of S.reviews)rv.parsed=parseCommand(rv.command);validateBatch();rebuildConverted();renderAll();
+})();
