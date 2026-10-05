@@ -22,6 +22,7 @@ window.PDHRecords = (() => {
     save(data); return record;
   }
   function payload(record) {
+    if(window.PDHHeads && record.state.headValidationVersion!==1 && record.state.converted?.sheets.some(sh=>PDHHeads.columns(sh.rows).some(({c})=>sh.rows.slice(1).some(r=>String(r[c]??'').trim()))))throw new Error('此 Test 尚未完成 Head 驗證，請先 EDIT 並 SAVE。');
     return {recordId: record.id, year: record.year, effectiveDate: record.effectiveDate, remark: record.remark,
       name: record.state.test?.name || 'Converted Hierarchy', converted: record.state.converted,
       mapping: record.state.reviews, primarySources: record.state.case3, baseline: baseline(record.year)};
@@ -31,7 +32,7 @@ window.PDHRecords = (() => {
     if (!record) throw new Error('找不到本次 Test 記錄，請返回 Test 列表重新選擇。');
     const current = data.official.find(x => x.year === String(payload.year));
     const after = {id: crypto.randomUUID(), year: String(payload.year), remark: payload.remark || '', effectiveDate,
-      book: JSON.parse(JSON.stringify(payload.converted)), originalBase64: record.state.originalBase64, originalBook: record.state.test, addedRows: record.state.addedRows || [], sourceTestId: record.id, updatedAt: new Date().toISOString()};
+      book: JSON.parse(JSON.stringify(payload.converted)), originalBase64: record.state.originalBase64, originalBook: record.state.originalBook || record.state.test, addedRows: record.state.addedRows || [], sourceTestId: record.id, updatedAt: new Date().toISOString()};
     if (current) data.official[data.official.indexOf(current)] = after; else data.official.unshift(after);
     record.goLiveAt = after.updatedAt; record.effectiveDate = effectiveDate;
     save(data);
