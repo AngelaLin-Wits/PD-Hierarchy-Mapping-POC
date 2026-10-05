@@ -4,10 +4,18 @@ window.PDHHeadsUI = (() => {
   document.getElementById('headStaffFile').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;const wb=XLSX.read(await f.text(),{type:'string',raw:true});const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:true});const n=H.load(rows);document.getElementById('headStaffStatus').textContent=`已載入 ${n} 位啟用且具有有效 Email 的員工`;if(typeof validateBatch==='function'){validateBatch();renderAll();}}catch(err){alert(err.message);}};
   const modal=document.createElement('div');modal.className='modal';modal.innerHTML='<div class="modal-box" style="width:min(1000px,96vw)"><h3>確認 Head</h3><div id="headContext"></div><label>載入員工基本檔 <input id="headDialogStaff" type="file" accept=".csv"></label><div id="headMissing" class="hint"></div><div id="headSelected" style="margin:12px 0"></div><input id="headSearch" placeholder="輸入部分姓名或 Email 搜尋" style="width:100%;box-sizing:border-box"><div id="headResults" style="max-height:38vh;overflow:auto;margin:12px 0"></div><div class="actions"><button class="btn primary" id="headResolveOk">確認指定</button><button class="btn" id="headResolveClear">設為沒有 Head</button><button class="btn" id="headResolveCancel">取消</button></div></div>';document.body.append(modal);document.getElementById('headDialogStaff').onchange=async e=>{await document.getElementById('headStaffFile').onchange(e);render();};
   let selected=[],missing=[],done=null;
-  function render(){document.getElementById('headSelected').innerHTML=selected.map((e,i)=>`<button class="btn" data-remove="${i}">${escape(e.name)} · ${escape(e.email)} ×</button>`).join('')||'尚未指定 Head';const q=document.getElementById('headSearch').value;document.getElementById('headResults').innerHTML=q?H.search(q).map(e=>`<button class="btn" style="display:block;width:100%;text-align:left;margin-bottom:5px" data-employee="${escape(e.id)}">${escape(e.name)} | ${escape(e.email)} | ${escape(e.department)}</button>`).join('')||'查無可選取員工，請確認員工基本檔與搜尋條件。':'請輸入姓名或 Email。';}
+  let visibleEmployees=[];
+  function render(){
+    document.getElementById('headSelected').textContent=`已選 ${selected.length} 位 Head（藍色為已選，再點一次取消；變更搜尋條件會保留已選員工）`;
+    const q=document.getElementById('headSearch').value;
+    visibleEmployees=H.unique([...selected,...(q?H.search(q):[])]);
+    document.getElementById('headResults').innerHTML=visibleEmployees.map(e=>{
+      const chosen=selected.some(x=>x.id===e.id);
+      return `<button type="button" class="btn ${chosen?'primary':''}" aria-pressed="${chosen}" style="display:block;width:100%;text-align:left;margin-bottom:5px;background:${chosen?'#06477e':'#fff'};color:${chosen?'#fff':'#26384f'};border:1px solid #b9c9d8" data-employee="${escape(e.id)}">${chosen?'✓ ':''}${escape(e.name)} | ${escape(e.email)} | ${escape(e.department)}</button>`;
+    }).join('')||(q?'查無可選取員工，請確認員工基本檔與搜尋條件。':'請輸入姓名或 Email。');
+  }
   document.getElementById('headSearch').oninput=render;
-  document.getElementById('headResults').onclick=e=>{const b=e.target.closest('[data-employee]');if(b){const item=H.search(document.getElementById('headSearch').value).find(x=>x.id===b.dataset.employee);if(item)selected=H.unique([...selected,item]);render();}};
-  document.getElementById('headSelected').onclick=e=>{const b=e.target.closest('[data-remove]');if(b){selected.splice(+b.dataset.remove,1);render();}};
+  document.getElementById('headResults').onclick=e=>{const b=e.target.closest('[data-employee]');if(b){const item=visibleEmployees.find(x=>x.id===b.dataset.employee);if(item)selected=selected.some(x=>x.id===item.id)?selected.filter(x=>x.id!==item.id):H.unique([...selected,item]);render();}};
   function finish(value){modal.classList.remove('show');const cb=done;done=null;cb(value);}
   document.getElementById('headResolveOk').onclick=()=>{if(!selected.length){alert('請指定員工，或按「設為沒有 Head」。');return;}finish(selected);};
   document.getElementById('headResolveClear').onclick=()=>finish([]);
