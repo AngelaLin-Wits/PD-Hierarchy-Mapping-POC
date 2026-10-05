@@ -56,3 +56,19 @@ $('officialFile').onchange = e => {
   reader.readAsArrayBuffer(file);
 };
 render();
+
+$('clearPoc').onclick = () => {
+  if (!confirm('確定清除目前瀏覽器的全部 Official 與 Test 資料？\n清除後無法復原。需要保留的 Excel 請先下載。')) return;
+  try {
+    ['pdhRecordsV1', 'pdhGoLivePayload', 'pdhBaseline'].forEach(key => localStorage.removeItem(key));
+    mode = 'official';
+    history.replaceState(null, '', location.pathname);
+    contentBook = null;
+    $('contentModal').classList.remove('show');
+    $('officialFile').value = '';
+    render();
+    alert('已清除。請先選擇 Year，載入 Official Excel，再切換 Test 新增一筆資料。');
+  } catch (err) {
+    alert('清除失敗：' + err.message);
+  }
+};
