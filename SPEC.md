@@ -128,3 +128,6 @@ Baseline survives Test uploads/reset and browser refresh where available. Only e
 - Filters and Standard/Virtual tabs affect display only. Download All Data always includes all rows and every worksheet.
 - For `.xlsx`, export patches changed hierarchy cell values into the original uploaded OOXML package rather than rebuilding the workbook. Original sheets, styles, fills, borders, widths, row attributes and unrelated package parts are retained. Inserted rows use nearby row formatting and update merge row ranges.
 - Legacy `.xls` may be read for review, but format-preserving Official download requires an original `.xlsx` template. Complex formula/table references affected by inserted rows require additional validation against the user's actual Excel template.
+
+## 18. Blank hierarchy cells (2026-10-05)
+A genuinely blank MD means no MD. Do not fill it from any previous row. At Excel import, only explicit vertical merged hierarchy cells inherit their own merge anchor value. Rename/Merge at PD level preserves blank MD. Official display, filtering and Go Live comparison all use these parsed values, without scanning backward to infer parents.

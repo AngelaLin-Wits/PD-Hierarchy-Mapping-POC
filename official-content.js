@@ -4,8 +4,7 @@ const normalize=v=>String(v??'').trim().toLowerCase().replace(/[\s_-]+/g,'');
 function renderSheet(index){
   activeSheet=index;const sheet=officialRecord.book.sheets[index],headers=sheet.rows[0]||[];
   const hierarchyCols=headers.map((h,c)=>({name:String(h),c,key:normalize(h)})).filter(x=>['bg','pggroup','pg','md','pd','pdl','marketdivision','productdivision','productline'].includes(x.key));
-  const parents=hierarchyCols.filter(x=>x.key!=='pdl'&&x.key!=='productline');
-  expandedRows=sheet.rows.slice(1).map((raw,i)=>{const values=raw.slice();for(const col of parents){if(!String(values[col.c]??'').trim()){for(let r=i;r>=0;r--){const v=sheet.rows[r+1]?.[col.c];if(String(v??'').trim()){values[col.c]=v;break;}}}}return {values,raw};});
+  expandedRows=sheet.rows.slice(1).map(raw=>({values:raw.slice(),raw}));
   $('filters').innerHTML=hierarchyCols.map(x=>`<label for="filter-${x.c}">${esc(x.name)}</label><select id="filter-${x.c}" data-column="${x.c}"><option value="">All</option>${[...new Set(expandedRows.map(r=>String(r.values[x.c]??'').trim()).filter(Boolean))].sort().map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')}</select>`).join('');
   $('sheetTabs').innerHTML=officialRecord.book.sheets.map((s,i)=>`<button class="tab ${i===index?'active':''}" data-sheet="${i}">${esc(s.name)}</button>`).join('');renderData();
 }

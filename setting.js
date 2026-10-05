@@ -47,7 +47,7 @@ $('officialFile').onchange = e => {
   reader.onerror=()=>alert('讀取 Excel 失敗。');
   reader.onload=()=>{try{
     const wb=XLSX.read(reader.result,{type:'array',cellStyles:true,cellDates:true});
-    const book={name:file.name,sheets:wb.SheetNames.map(name=>({name,hierarchyType:/virtual|shadow/i.test(name)?'Virtual':/hierarchy|standard/i.test(name)?'Standard':'Unknown',rows:XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:'',raw:false})}))};
+    const book={name:file.name,sheets:wb.SheetNames.map(name=>({name,hierarchyType:/virtual|shadow/i.test(name)?'Virtual':/hierarchy|standard/i.test(name)?'Standard':'Unknown',rows:PDHHierarchyExcel.rows(wb.Sheets[name])}))};
     const data=PDHRecords.load(),old=data.official.find(x=>x.year===year);
     const record={id:old?.id||crypto.randomUUID(),year,remark:file.name,effectiveDate:'',book,originalBook:book,originalBase64:btoa(Array.from(new Uint8Array(reader.result),b=>String.fromCharCode(b)).join('')),addedRows:[]};
     if(old)data.official[data.official.indexOf(old)]=record;else data.official.unshift(record);
