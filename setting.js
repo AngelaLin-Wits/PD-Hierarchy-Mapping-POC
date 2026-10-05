@@ -47,11 +47,13 @@ $('officialFile').onchange = e => {
   if(PDHRecords.official(year)&&!confirm(`取代 ${year} 年目前的 POC Official Baseline？`)){e.target.value='';return;}
   const reader=new FileReader();
   reader.onerror=()=>alert('讀取 Excel 失敗。');
-  reader.onload=()=>{try{
+  reader.onload=async()=>{try{
     const wb=XLSX.read(reader.result,{type:'array',cellStyles:true,cellDates:true});
     const book={name:file.name,sheets:wb.SheetNames.map(name=>({name,hierarchyType:/virtual|shadow/i.test(name)?'Virtual':/hierarchy|standard/i.test(name)?'Standard':'Unknown',rows:PDHHierarchyExcel.rows(wb.Sheets[name])}))};
+    const originalBook=JSON.parse(JSON.stringify(book));
+    if(!await PDHHeadsUI.validateBook(book))return;
     const data=PDHRecords.load(),old=data.official.find(x=>x.year===year);
-    const record={id:old?.id||crypto.randomUUID(),year,remark:file.name,effectiveDate:'',book,originalBook:book,originalBase64:btoa(Array.from(new Uint8Array(reader.result),b=>String.fromCharCode(b)).join('')),addedRows:[]};
+    const record={id:old?.id||crypto.randomUUID(),year,remark:file.name,effectiveDate:'',book,originalBook,originalBase64:btoa(Array.from(new Uint8Array(reader.result),b=>String.fromCharCode(b)).join('')),addedRows:[]};
     if(old)data.official[data.official.indexOf(old)]=record;else data.official.unshift(record);
     PDHRecords.save(data);render();
   }catch(err){alert('載入失敗：'+err.message);}finally{e.target.value='';}};
