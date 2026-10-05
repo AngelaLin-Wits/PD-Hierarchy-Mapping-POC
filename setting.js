@@ -21,7 +21,9 @@ function render() {
 function showSheet(i) {
   const sheet = contentBook.sheets[i];
   $('contentTabs').innerHTML = contentBook.sheets.map((x,n) => `<button class="tab ${n===i?'active':''}" data-sheet="${n}">${esc(x.name)}</button>`).join('');
-  $('contentTable').innerHTML = '<table><thead><tr>'+sheet.rows[0].map(x=>`<th>${esc(x)}</th>`).join('')+'</tr></thead><tbody>'+sheet.rows.slice(1).map(row=>'<tr>'+sheet.rows[0].map((_,c)=>`<td>${esc(row[c])}</td>`).join('')+'</tr>').join('')+'</tbody></table>';
+  const headers = sheet.rows[0];
+  const columnClass = header => /^PDL(?:\\s|$)/i.test(String(header).trim()) ? 'content-pdl' : 'content-nowrap';
+  $('contentTable').innerHTML = '<table><thead><tr>'+headers.map(x=>`<th class="${columnClass(x)}">${esc(x)}</th>`).join('')+'</tr></thead><tbody>'+sheet.rows.slice(1).map(row=>'<tr>'+headers.map((header,c)=>`<td class="${columnClass(header)}">${esc(row[c])}</td>`).join('')+'</tr>').join('')+'</tbody></table>';
 }
 $('modeToggle').onclick = () => { mode = mode === 'official' ? 'test' : 'official'; history.replaceState(null,'', mode === 'test' ? '?view=test' : location.pathname); render(); };
 $('addTest').onclick = () => { location.href = 'mapping.html?new=1'; };
