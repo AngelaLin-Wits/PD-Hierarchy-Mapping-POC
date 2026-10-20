@@ -42,4 +42,39 @@ old.onclick=()=>{
  XLSX.writeFile(wb,'PD_Hierarchy_Sort_Validation_PARTIAL.xlsx');
 };
 })();
+</script>
+<script>
+(function(){
+const panel=document.createElement('section');panel.className='card';
+panel.innerHTML='<h3>3A. Rename Mapping Review → Converted Data</h3><p>Rename 必須指定 Level、原名稱及新名稱，確認後才會套用。只更新 Test 預覽，不更動 Official。名稱重複或找不到來源時不允許套用。</p><p><label>Level <select id="rnLevel"><option>PD</option><option>MD</option><option>BG</option><option>PG</option><option>PDL</option></select></label>　<label>Old Name <input id="rnOld" placeholder="原名稱"></label>　<label>New Name <input id="rnNew" placeholder="新名稱"></label>　<button id="rnApply" disabled>Confirm & Apply Rename</button>　<button id="rnDownload" disabled>Download Converted Test Excel</button></p><p id="rnStatus">請先上傳 Excel。</p><div style="overflow:auto;max-height:360px"><table><thead><tr><th>Source Row</th><th>Level</th><th>Old Name</th><th>New Name</th><th>Action</th></tr></thead><tbody id="rnHistory"><tr><td colspan="5">尚無 Rename</td></tr></tbody></table></div>';
+document.querySelectorAll('section.card')[2].after(panel);
+const $=id=>document.getElementById(id);
+let converted=[],history=[],original=[],loaded=false;
+function col(level){return headers.findIndex(h=>String(h).trim().toUpperCase()===level)}
+function norm(s){return String(s??'').trim().toLowerCase()}
+function reset(){converted=source.map(x=>({row:x.row,values:x.values.slice()}));original=source.map(x=>({row:x.row,values:x.values.slice()}));history=[];loaded=true;$('rnApply').disabled=false;$('rnDownload').disabled=false;draw()}
+function draw(){ $('rnHistory').innerHTML=history.map(h=>'<tr><td>'+h.rows.join(', ')+'</td><td>'+h.level+'</td><td>'+escapeHtml(h.old)+'</td><td>'+escapeHtml(h.next)+'</td><td>Rename confirmed</td></tr>').join('')||'<tr><td colspan="5">尚無 Rename</td></tr>';$('rnStatus').textContent='Converted Data: '+converted.length+' rows；已確認 Rename: '+history.length+' 筆。原始資料及 Official 不變。'}
+$('load').addEventListener('click',()=>setTimeout(()=>{if(source.length)reset()},300));
+$('rnApply').onclick=()=>{
+if(!loaded)return alert('請先上傳 Excel');
+const level=$('rnLevel').value,old=$('rnOld').value.trim(),next=$('rnNew').value.trim(),i=col(level);
+if(i<0)return alert('上傳的 Excel 沒有 '+level+' 欄位，無法安全改名。');
+if(!old||!next||norm(old)===norm(next))return alert('請輸入不同的原名稱與新名稱');
+const matches=converted.filter(x=>norm(x.values[i])===norm(old));
+if(!matches.length)return alert('找不到原名稱：'+old+'，請確認 Excel 欄位與來源名稱');
+if(converted.some(x=>norm(x.values[i])===norm(next)))return alert('新名稱已存在，可能是 Merge；Rename 不允許直接覆蓋');
+if(!confirm('確認 Rename '+level+'：'+old+' → '+next+'？\\n影響 '+matches.length+' 列，僅更新 Converted Test Preview。'))return;
+matches.forEach(x=>x.values[i]=next);
+history.push({level,old,next,rows:matches.map(x=>x.row),confirmed:true,at:new Date().toISOString()});
+draw();
+};
+$('rnDownload').onclick=()=>{
+if(!loaded)return;
+const wb=XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([headers,...converted.map(x=>x.values)]),'Converted Test');
+XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Source Row(s)','Level','Old Name','New Name','Action','Confirmed'],...history.map(h=>[h.rows.join(','),h.level,h.old,h.next,'Rename','Yes'])]),'Rename Mapping');
+XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Notice','Converted Test preview only; NOT Official or Go Live'],['Sort','Existing partial Sort validation only; not recalculated here'],['ID','Source row retained; stable Official IDs not assigned in this preview']]),'Read Me');
+XLSX.writeFile(wb,'PD_Hierarchy_Converted_Test_Rename_Preview.xlsx');
+};
+})();
 </script></body></html>
