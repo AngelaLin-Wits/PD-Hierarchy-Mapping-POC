@@ -9,4 +9,19 @@ el('all').onclick=()=>{commands.forEach(c=>{if(c.action!=='Unrecognized')c.confi
 el('save').onclick=()=>{if(commands.some(c=>!c.confirmed)){alert('請先確認每筆 Command；無法解析的指令須人工處理');return}localStorage.setItem('pd_full_cleansing_review_draft_v05',JSON.stringify({savedAt:new Date().toISOString(),source,commands,sortStatus:'pending_python_engine'}));alert('已儲存整合驗證草稿（非正式 Test SAVE）')};
 el('download').onclick=()=>{let aoa=[headers,...source.map(o=>o.values)];XLSX.writeFile(XLSX.utils.book_new(),'unused.xlsx');};
 el('download').onclick=()=>{let wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([headers,...source.map(o=>o.values)]),'Source Order');XLSX.writeFile(wb,'PD_Hierarchy_Source_Order_Preview.xlsx')};
+</script><script src="cleansing-core.js"></script><script>
+(function(){
+const panel=document.createElement('section');panel.className='card';panel.innerHTML='<h3>2A. Python boundary Sort port (partial)</h3><p>只移植一般 BG / MD / PD Sort 邊界規則。PG Total、MD wo、WISE-IoT、AKTC、Denodo、PDL、完整輸出仍待移植與比對，不能作為正式 Go Live Sort。</p><div id="sortResult">上傳 Excel 後顯示。</div><div style="overflow:auto;max-height:420px"><table><thead><tr><th>Source Row</th><th>BG</th><th>MD</th><th>PD</th><th>PD Sort</th><th>MD Sort</th><th>BG Sort</th></tr></thead><tbody id="sortRows"></tbody></table></div>';
+document.querySelectorAll('section.card')[1].after(panel);
+document.getElementById('load').addEventListener('click',()=>setTimeout(()=>{
+if(!source.length)return;
+const ix=(name)=>headers.findIndex(h=>String(h).trim().toLowerCase()===name);
+const indexes=['bg','md','pd'].map(ix);
+if(indexes.some(i=>i<0)){document.getElementById('sortResult').textContent='找不到 BG / MD / PD 欄位，無法計算。';return}
+const input=source.map(o=>({sourceRow:o.row,bg:String(o.values[indexes[0]]||''),md:String(o.values[indexes[1]]||''),pd:String(o.values[indexes[2]]||'')})).filter(o=>o.bg||o.md||o.pd);
+const result=PDHCleansingCore.calculate(input);
+document.getElementById('sortResult').textContent='一般 Sort 已計算 '+result.rows.length+' 列；特殊規則警示 '+result.warnings.length+' 筆。'+result.warnings.slice(0,4).join('；');
+document.getElementById('sortRows').innerHTML=result.rows.map(o=>'<tr><td>'+o.sourceRow+'</td><td>'+escapeHtml(o.bg)+'</td><td>'+escapeHtml(o.md)+'</td><td>'+escapeHtml(o.pd)+'</td><td>'+(o.pdSort??'')+'</td><td>'+(o.mdSort??'')+'</td><td>'+(o.bgSort??'')+'</td></tr>').join('');
+},150));
+})();
 </script></body></html>
