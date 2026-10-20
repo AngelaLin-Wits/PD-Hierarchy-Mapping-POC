@@ -24,4 +24,22 @@ document.getElementById('sortResult').textContent='一般 Sort 已計算 '+resul
 document.getElementById('sortRows').innerHTML=result.rows.map(o=>'<tr><td>'+o.sourceRow+'</td><td>'+escapeHtml(o.bg)+'</td><td>'+escapeHtml(o.md)+'</td><td>'+escapeHtml(o.pd)+'</td><td>'+(o.pdSort??'')+'</td><td>'+(o.mdSort??'')+'</td><td>'+(o.bgSort??'')+'</td></tr>').join('');
 },150));
 })();
+</script><script>
+(function(){
+const old=document.getElementById('download');
+old.textContent='Download Sort Validation Excel（部分清洗）';
+old.onclick=()=>{
+ if(!source.length){alert('請先上傳 Excel');return}
+ const idx=n=>headers.findIndex(h=>String(h).trim().toLowerCase()===n);
+ const bg=idx('bg'),md=idx('md'),pd=idx('pd');
+ if([bg,md,pd].some(x=>x<0)){alert('找不到 BG / MD / PD 欄位');return}
+ const input=source.map(o=>({sourceRow:o.row,bg:String(o.values[bg]||''),md:String(o.values[md]||''),pd:String(o.values[pd]||'')})).filter(o=>o.bg||o.md||o.pd);
+ const res=PDHCleansingCore.calculate(input);
+ const output=[['Source Row','BG','MD','PD','PD Sort','MD Sort','BG Sort','Verification Status'],...res.rows.map(o=>[o.sourceRow,o.bg,o.md,o.pd,o.pdSort??'',o.mdSort??'',o.bgSort??'','PARTIAL - NOT FOR GO LIVE'])];
+ const wb=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(output),'Sort Validation');
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Item','Status'],['Source row sequence','Preserved'],['BG MD PD boundary Sort','Partial JS port'],['PG Total MD wo special rules','Not verified'],['WISE-IoT AKTC Denodo Sign Flow','Not ported'],['Go Live','NOT APPROVED'],...res.warnings.map(w=>['Warning',w])]),'Validation Notes');
+ XLSX.writeFile(wb,'PD_Hierarchy_Sort_Validation_PARTIAL.xlsx');
+};
+})();
 </script></body></html>
